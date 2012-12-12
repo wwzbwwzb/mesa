@@ -25,9 +25,11 @@
  *    Chia-I Wu <olv@lunarg.com>
  */
 
+#include "util/u_transfer.h"
 #include "i965_common.h"
 #include "i965_screen.h"
 #include "i965_context.h"
+#include "i965_cp.h"
 #include "i965_resource.h"
 
 static boolean
@@ -139,6 +141,157 @@ realloc_bo(struct i965_resource *res)
       res->bo = old_bo;
       return FALSE;
    }
+}
+
+/**
+ * \see intel_bufferobj_subdata()
+ */
+static void
+i965_transfer_inline_write(struct pipe_context *pipe,
+                           struct pipe_resource *r,
+                           unsigned level,
+                           unsigned usage,
+                           const struct pipe_box *box,
+                           const void *data,
+                           unsigned stride,
+                           unsigned layer_stride)
+{
+   struct i965_context *i965 = i965_context(pipe);
+   struct i965_resource *res = i965_resource(r);
+
+   if (res->base.target == PIPE_BUFFER) {
+      if (i965->cp->bo->references(i965->cp->bo, res->bo))
+         i965_cp_flush(i965->cp);
+      res->bo->subdata(res->bo, box->x, box->width, data);
+   }
+   else {
+      u_default_transfer_inline_write(pipe, r,
+            level, usage, box, data, stride, layer_stride);
+   }
+}
+
+/**
+ * \see intel_bufferobj_unmap()
+ */
+static void
+i965_transfer_unmap(struct pipe_context *pipe,
+                    struct pipe_transfer *transfer)
+{
+   struct i965_resource *res = i965_resource(transfer->resource);
+
+   res->bo->unmap(res->bo);
+
+   pipe_resource_reference(&transfer->resource, NULL);
+   FREE(transfer);
+}
+
+/**
+ * \see intel_bufferobj_flush_mapped_range()
+ */
+static void
+i965_transfer_flush_region(struct pipe_context *pipe,
+                           struct pipe_transfer *transfer,
+                           const struct pipe_box *box)
+{
+}
+
+/**
+ * \see intel_miptree_map()
+ * \see intel_bufferobj_map_range()
+ */
+static void *
+i965_transfer_map(struct pipe_context *pipe,
+                  struct pipe_resource *r,
+                  unsigned level,
+                  unsigned usage,
+                  const struct pipe_box *box,
+                  struct pipe_transfer **transfer)
+{
+   struct i965_context *i965 = i965_context(pipe);
+   struct i965_resource *res = i965_resource(r);
+   struct pipe_transfer *xfer;
+   void *ptr;
+   int x, y, err;
+
+   xfer = MALLOC_STRUCT(pipe_transfer);
+   if (!xfer)
+      return NULL;
+
+   /* sync access by flushing or reallocation */
+   if (!(usage & PIPE_TRANSFER_UNSYNCHRONIZED)) {
+      boolean can_discard =
+         !!(usage & PIPE_TRANSFER_DISCARD_WHOLE_RESOURCE);
+
+      if (i965->cp->bo->references(i965->cp->bo, res->bo)) {
+         if (!can_discard || !realloc_bo(res))
+            i965_cp_flush(i965->cp);
+      }
+      else if (can_discard && res->bo->busy(res->bo)) {
+         realloc_bo(res);
+      }
+   }
+
+   /* mapping a discardable subrange of a busy bo */
+   if ((usage & PIPE_TRANSFER_DISCARD_RANGE) &&
+       res->bo->busy(res->bo)) {
+      /* TODO allocate a scratch bo or system buffer, and blit on unmapping */
+   }
+
+   if (res->tiling == INTEL_TILING_NONE) {
+      if (usage & PIPE_TRANSFER_UNSYNCHRONIZED)
+         err = res->bo->map_unsynchronized(res->bo);
+      else if (usage & PIPE_TRANSFER_READ)
+         err = res->bo->map(res->bo, !!(usage & PIPE_TRANSFER_WRITE));
+      else
+         err = res->bo->map_gtt(res->bo);
+   }
+   else {
+      err = res->bo->map_gtt(res->bo);
+   }
+
+   /* init transfer */
+   if (!err) {
+      xfer->resource = NULL;
+      pipe_resource_reference(&xfer->resource, &res->base);
+
+      xfer->level = level;
+      xfer->usage = usage;
+      xfer->box = *box;
+
+      xfer->stride = res->bo_stride;
+
+      if (res->base.array_size > 1) {
+         const unsigned qpitch =
+            res->slice_offsets[level][1].y - res->slice_offsets[level][0].y;
+
+         xfer->layer_stride = qpitch * xfer->stride;
+      }
+      else {
+         xfer->layer_stride = 0;
+      }
+
+      *transfer = xfer;
+   }
+   else {
+      FREE(xfer);
+      return NULL;
+   }
+
+   x = res->slice_offsets[level][box->z].x;
+   y = res->slice_offsets[level][box->z].y;
+
+   x += box->x;
+   y += box->y;
+
+   /* in blocks */
+   assert(x % res->block_width == 0 && y % res->block_height == 0);
+   x /= res->block_width;
+   y /= res->block_height;
+
+   ptr = res->bo->get_virtual(res->bo);
+   ptr += y * res->bo_stride + x * res->bo_cpp;
+
+   return ptr;
 }
 
 static boolean
@@ -559,8 +712,8 @@ i965_init_resource_functions(struct i965_screen *is)
 void
 i965_init_transfer_functions(struct i965_context *i965)
 {
-   i965->base.transfer_map = NULL;
-   i965->base.transfer_flush_region = NULL;
-   i965->base.transfer_unmap = NULL;
-   i965->base.transfer_inline_write = NULL;
+   i965->base.transfer_map = i965_transfer_map;
+   i965->base.transfer_flush_region = i965_transfer_flush_region;
+   i965->base.transfer_unmap = i965_transfer_unmap;
+   i965->base.transfer_inline_write = i965_transfer_inline_write;
 }

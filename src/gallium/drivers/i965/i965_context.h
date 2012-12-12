@@ -32,7 +32,9 @@
 #include "i965_common.h"
 
 struct intel_winsys;
+struct intel_bo;
 struct i965_screen;
+struct i965_cp;
 
 struct i965_context {
    struct pipe_context base;
@@ -50,6 +52,9 @@ struct i965_context {
       int max_vs_entries;
       int max_gs_entries;
    } urb;
+
+   struct i965_cp *cp;
+   struct intel_bo *last_cp_bo;
 };
 
 static INLINE struct i965_context *

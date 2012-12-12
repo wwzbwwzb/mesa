@@ -29,6 +29,7 @@
 
 #include "i965_common.h"
 #include "i965_screen.h"
+#include "i965_cp.h"
 #include "i965_blit.h"
 #include "i965_resource.h"
 #include "i965_3d.h"
@@ -38,6 +39,75 @@
 #include "i965_video.h"
 #include "i965_context.h"
 
+static void
+i965_context_new_cp_batch(struct i965_cp *cp, void *data)
+{
+}
+
+static void
+i965_context_pre_cp_flush(struct i965_cp *cp, void *data)
+{
+}
+
+static void
+i965_context_post_cp_flush(struct i965_cp *cp, void *data)
+{
+   struct i965_context *i965 = i965_context(data);
+
+   if (i965->last_cp_bo)
+      i965->last_cp_bo->unreference(i965->last_cp_bo);
+
+   /* remember the just flushed bo, which fences could wait on */
+   i965->last_cp_bo = cp->bo;
+   i965->last_cp_bo->reference(i965->last_cp_bo);
+}
+
+static void
+i965_flush(struct pipe_context *pipe,
+           struct pipe_fence_handle **f)
+{
+   struct i965_context *i965 = i965_context(pipe);
+
+   if (f) {
+      struct i965_fence *fence;
+
+      fence = CALLOC_STRUCT(i965_fence);
+      if (fence) {
+         pipe_reference_init(&fence->reference, 1);
+
+         /* reference the batch bo that we want to wait on */
+         if (i965_cp_empty(i965->cp))
+            fence->bo = i965->last_cp_bo;
+         else
+            fence->bo = i965->cp->bo;
+
+         if (fence->bo)
+            fence->bo->reference(fence->bo);
+      }
+
+      *f = (struct pipe_fence_handle *) fence;
+   }
+
+   i965_cp_flush(i965->cp);
+}
+
+static void
+i965_context_destroy(struct pipe_context *pipe)
+{
+   struct i965_context *i965 = i965_context(pipe);
+
+   if (i965->last_cp_bo)
+      i965->last_cp_bo->unreference(i965->last_cp_bo);
+
+   if (i965->cp)
+      i965_cp_destroy(i965->cp);
+
+   FREE(i965);
+}
+
+/**
+ * \see brwCreateContext()
+ */
 static struct pipe_context *
 i965_context_create(struct pipe_screen *screen, void *priv)
 {
@@ -100,11 +170,26 @@ i965_context_create(struct pipe_screen *screen, void *priv)
 	 i965->urb.max_gs_entries = 256;
       }
    }
+
+   i965->cp = i965_cp_create(i965->winsys);
+
+   if (!i965->cp) {
+      i965_context_destroy(&i965->base);
+      return NULL;
+   }
+
+   i965_cp_set_hook(i965->cp, I965_CP_HOOK_NEW_BATCH,
+         i965_context_new_cp_batch, (void *) i965);
+   i965_cp_set_hook(i965->cp, I965_CP_HOOK_PRE_FLUSH,
+         i965_context_pre_cp_flush, (void *) i965);
+   i965_cp_set_hook(i965->cp, I965_CP_HOOK_POST_FLUSH,
+         i965_context_post_cp_flush, (void *) i965);
+
    i965->base.screen = screen;
    i965->base.priv = priv;
 
-   i965->base.destroy = NULL;
-   i965->base.flush = NULL;
+   i965->base.destroy = i965_context_destroy;
+   i965->base.flush = i965_flush;
 
    i965_init_3d_functions(i965);
    i965_init_query_functions(i965);

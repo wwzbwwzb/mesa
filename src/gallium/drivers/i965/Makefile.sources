@@ -8,4 +8,5 @@ C_SOURCES := \
 	i965_resource.c \
 	i965_screen.c \
 	i965_state.c \
+	i965_translate.c \
 	i965_video.c

@@ -55,6 +55,21 @@ struct i965_context {
 
    struct i965_cp *cp;
    struct intel_bo *last_cp_bo;
+
+   struct pipe_rasterizer_state *rasterizer;
+
+   struct pipe_framebuffer_state framebuffer;
+
+   struct {
+      struct pipe_sampler_state *samplers[I965_MAX_SAMPLERS];
+      unsigned num_samplers;
+   } samplers[PIPE_SHADER_TYPES];
+
+   struct {
+      struct pipe_sampler_view *views[I965_MAX_SAMPLER_VIEWS];
+      unsigned num_views;
+   } sampler_views[PIPE_SHADER_TYPES];
+
 };
 
 static INLINE struct i965_context *

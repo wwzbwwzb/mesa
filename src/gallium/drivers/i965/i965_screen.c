@@ -34,11 +34,28 @@
 #include "i965_resource.h"
 #include "i965_screen.h"
 
+#ifdef DEBUG
+int i965_debug;
+#endif
+
+static const struct debug_named_value i965_debug_flags[] = {
+   { "nohw",      I965_DEBUG_NOHW,     "Do not send commands to HW" },
+   { "nocache",   I965_DEBUG_NOCACHE,  "Always invalidate HW caches" },
+   { "3d",        I965_DEBUG_3D,       "Dump 3D commands and states" },
+   { "vs",        I965_DEBUG_VS,       "Dump vertex shaders" },
+   { "fs",        I965_DEBUG_FS,       "Dump fragment shaders" },
+   DEBUG_NAMED_VALUE_END
+};
+
 struct pipe_screen *
 i965_screen_create(struct intel_winsys *ws)
 {
    struct i965_screen *is;
    const struct intel_info *info;
+
+#ifdef DEBUG
+   i965_debug = debug_get_flags_option("I965_DEBUG", i965_debug_flags, 0);
+#endif
 
    is = CALLOC_STRUCT(i965_screen);
    if (!is)

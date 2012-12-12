@@ -39,4 +39,18 @@
 #include "util/u_memory.h"
 #include "util/u_double_list.h"
 
+enum i965_debug {
+   I965_DEBUG_NOHW      = 0x01,
+   I965_DEBUG_3D        = 0x02,
+   I965_DEBUG_VS        = 0x04,
+   I965_DEBUG_FS        = 0x08,
+   I965_DEBUG_NOCACHE   = 0x10,
+};
+
+#ifdef DEBUG
+extern int i965_debug;
+#else
+#define i965_debug 0
+#endif
+
 #endif /* I965_COMMON_H */

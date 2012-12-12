@@ -96,6 +96,15 @@ egl_LIBS += \
 egl_SYS += $(INTEL_LIBS)
 endif
 
+# i965
+ifneq ($(findstring intel/drm,$(GALLIUM_WINSYS_DIRS)),)
+egl_CPPFLAGS += -D_EGL_PIPE_I965=1
+egl_LIBS += \
+	$(TOP)/src/gallium/winsys/intel/drm/libintelwinsys.a \
+	$(TOP)/src/gallium/drivers/i965/libi965.a
+egl_SYS += $(INTEL_LIBS)
+endif
+
 # nouveau
 ifneq ($(findstring nouveau/drm,$(GALLIUM_WINSYS_DIRS)),)
 egl_CPPFLAGS += -D_EGL_PIPE_NOUVEAU=1

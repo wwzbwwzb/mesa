@@ -36,6 +36,12 @@ i915_LIBS = \
 	$(TOP)/src/gallium/drivers/i915/libi915.a
 i915_SYS = $(INTEL_LIBS)
 
+# i965 pipe driver
+i965_LIBS = \
+	$(TOP)/src/gallium/winsys/intel/drm/libintelwinsys.a \
+	$(TOP)/src/gallium/drivers/i965/libi965.a
+i965_SYS = $(INTEL_LIBS)
+
 # nouveau pipe driver
 nouveau_LIBS = \
 	$(TOP)/src/gallium/winsys/nouveau/drm/libnouveaudrm.a \
@@ -90,6 +96,11 @@ PIPE_SOURCES =
 ifneq ($(findstring i915/drm,$(GALLIUM_WINSYS_DIRS)),)
    _PIPE_TARGETS_CC += $(PIPE_PREFIX)i915.so
    PIPE_SOURCES += pipe_i915.c
+endif
+
+ifneq ($(findstring intel/drm,$(GALLIUM_WINSYS_DIRS)),)
+   _PIPE_TARGETS_CC += $(PIPE_PREFIX)i965.so
+   PIPE_SOURCES += pipe_i965.c
 endif
 
 ifneq ($(findstring nouveau/drm,$(GALLIUM_WINSYS_DIRS)),)

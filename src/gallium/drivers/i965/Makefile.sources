@@ -14,4 +14,11 @@ C_SOURCES := \
 	i965_shader.c \
 	i965_state.c \
 	i965_translate.c \
-	i965_video.c
+	i965_video.c \
+	shader/toy_compiler.c \
+	shader/toy_compiler_asm.c \
+	shader/toy_compiler_disasm.c \
+	shader/toy_legalize.c \
+	shader/toy_legalize_ra.c \
+	shader/toy_optimize.c \
+	shader/toy_tgsi.c

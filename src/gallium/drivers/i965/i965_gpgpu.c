@@ -29,11 +29,18 @@
 #include "i965_context.h"
 #include "i965_gpgpu.h"
 
+static void
+i965_launch_grid(struct pipe_context *pipe,
+                 const uint *block_layout, const uint *grid_layout,
+                 uint32_t pc, const void *input)
+{
+}
+
 /**
  * Initialize GPGPU-related functions.
  */
 void
 i965_init_gpgpu_functions(struct i965_context *i965)
 {
-   i965->base.launch_grid = NULL;
+   i965->base.launch_grid = i965_launch_grid;
 }

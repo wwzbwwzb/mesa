@@ -186,19 +186,13 @@ i965_shader_cache_mark_busy(struct i965_shader_cache *shc)
       shc->busy = TRUE;
 }
 
-static INLINE struct i965_shader *
+struct i965_shader *
 i965_shader_compile_vs(const struct i965_shader_state *state,
-                       const struct i965_shader_variant *variant)
-{
-   return CALLOC_STRUCT(i965_shader);
-}
+                       const struct i965_shader_variant *variant);
 
-static INLINE struct i965_shader *
+struct i965_shader *
 i965_shader_compile_fs(const struct i965_shader_state *state,
-                       const struct i965_shader_variant *variant)
-{
-   return CALLOC_STRUCT(i965_shader);
-}
+                       const struct i965_shader_variant *variant);
 
 static INLINE struct i965_shader *
 i965_shader_compile_gs(const struct i965_shader_state *state,

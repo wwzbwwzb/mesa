@@ -25,9 +25,31 @@
  *    Chia-I Wu <olv@lunarg.com>
  */
 
+#include "vl/vl_decoder.h"
+#include "vl/vl_video_buffer.h"
+
 #include "i965_common.h"
 #include "i965_context.h"
 #include "i965_video.h"
+
+static struct pipe_video_decoder *
+i965_create_video_decoder(struct pipe_context *pipe,
+                          enum pipe_video_profile profile,
+                          enum pipe_video_entrypoint entrypoint,
+                          enum pipe_video_chroma_format chroma_format,
+                          unsigned width, unsigned height, unsigned max_references,
+                          bool expect_chunked_decode)
+{
+   return vl_create_decoder(pipe, profile, entrypoint, chroma_format,
+         width, height, max_references, expect_chunked_decode);
+}
+
+static struct pipe_video_buffer *
+i965_create_video_buffer(struct pipe_context *pipe,
+                         const struct pipe_video_buffer *templ)
+{
+   return vl_video_buffer_create(pipe, templ);
+}
 
 /**
  * Initialize video-related functions.
@@ -35,6 +57,6 @@
 void
 i965_init_video_functions(struct i965_context *i965)
 {
-   i965->base.create_video_decoder = NULL;
-   i965->base.create_video_buffer = NULL;
+   i965->base.create_video_decoder = i965_create_video_decoder;
+   i965->base.create_video_buffer = i965_create_video_buffer;
 }

@@ -1839,6 +1839,12 @@ if test "x$with_gallium_drivers" != x; then
             GALLIUM_WINSYS_DIRS="$GALLIUM_WINSYS_DIRS i915/sw"
             gallium_check_st "i915/drm" "dri-i915" "xorg-i915"
             ;;
+        xi965)
+            PKG_CHECK_MODULES([INTEL], [libdrm_intel >= $LIBDRM_INTEL_REQUIRED])
+            gallium_require_drm_loader
+            GALLIUM_DRIVERS_DIRS="$GALLIUM_DRIVERS_DIRS i965"
+            gallium_check_st "intel/drm" "dri-i965"
+            ;;
         xr300)
             PKG_CHECK_MODULES([RADEON], [libdrm_radeon >= $LIBDRM_RADEON_REQUIRED])
             gallium_require_llvm "Gallium R300"
@@ -1991,6 +1997,7 @@ AC_CONFIG_FILES([configs/current
 		src/gallium/Makefile
 		src/gallium/auxiliary/pipe-loader/Makefile
 		src/gallium/drivers/Makefile
+		src/gallium/drivers/i965/Makefile
 		src/gallium/drivers/r300/Makefile
 		src/gallium/drivers/r600/Makefile
 		src/gallium/state_trackers/clover/Makefile

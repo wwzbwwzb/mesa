@@ -28,8 +28,39 @@
 #ifndef I965_RESOURCE_H
 #define I965_RESOURCE_H
 
+#include "pipe/p_state.h"
+#include "intel_winsys.h"
+
 struct i965_screen;
 struct i965_context;
+struct winsys_handle;
+
+struct i965_resource {
+   struct pipe_resource base;
+   struct winsys_handle *handle;
+
+   boolean compressed;
+   unsigned block_width;
+   unsigned block_height;
+   boolean valign_4;
+
+   struct intel_bo *bo;
+   /* in blocks */
+   int bo_width, bo_height, bo_cpp, bo_stride;
+   enum intel_tiling_mode tiling;
+
+   /* 2D offsets into a layer/slice/face */
+   struct {
+      unsigned x;
+      unsigned y;
+   } *slice_offsets[PIPE_MAX_TEXTURE_LEVELS];
+};
+
+static INLINE struct i965_resource *
+i965_resource(struct pipe_resource *res)
+{
+   return (struct i965_resource *) res;
+}
 
 void
 i965_init_resource_functions(struct i965_screen *is);

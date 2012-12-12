@@ -4,6 +4,7 @@ C_SOURCES := \
 	i965_context.c \
 	i965_cp.c \
 	i965_format.c \
+	i965_gpe_gen6.c \
 	i965_gpgpu.c \
 	i965_query.c \
 	i965_resource.c \

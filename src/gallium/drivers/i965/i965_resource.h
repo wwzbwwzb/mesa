@@ -68,4 +68,9 @@ i965_init_resource_functions(struct i965_screen *is);
 void
 i965_init_transfer_functions(struct i965_context *i965);
 
+unsigned
+i965_resource_get_slice_offset(const struct i965_resource *res,
+                               int level, int slice, boolean tile_aligned,
+                               unsigned *x_offset, unsigned *y_offset);
+
 #endif /* I965_RESOURCE_H */

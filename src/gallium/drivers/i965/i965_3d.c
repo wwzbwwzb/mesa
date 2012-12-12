@@ -27,13 +27,225 @@
 
 #include "intel_winsys.h"
 
+#include "util/u_prim.h"
 #include "i965_common.h"
 #include "i965_context.h"
 #include "i965_cp.h"
+#include "i965_query.h"
 #include "i965_shader.h"
 #include "i965_state.h"
 #include "i965_3d_gen6.h"
 #include "i965_3d.h"
+
+static void
+alloc_query_bo(struct i965_3d *hw3d, struct i965_query *q)
+{
+   const int size = 4096;
+   const char *name;
+
+   q->size = size / sizeof(uint64_t);
+   q->used = 0;
+
+   /* except for timestamp, we write pairs of the values */
+   assert(q->size % 2 == 0);
+
+   /* should we reallocate? */
+   if (q->bo)
+      return;
+
+   switch (q->type) {
+   case PIPE_QUERY_OCCLUSION_COUNTER:
+      name = "occlusion query";
+      break;
+   case PIPE_QUERY_TIMESTAMP:
+      name = "timestamp query";
+      break;
+   case PIPE_QUERY_TIME_ELAPSED:
+      name = "time elapsed query";
+      break;
+   default:
+      name = "unknown query";
+      break;
+   }
+
+   q->bo = hw3d->cp->winsys->alloc(hw3d->cp->winsys, name, size, 4096);
+}
+
+/**
+ * Begin a query.
+ */
+void
+i965_3d_begin_query(struct i965_context *i965, struct i965_query *q)
+{
+   struct i965_3d *hw3d = i965->hw3d;
+
+   i965_cp_set_ring(i965->cp, INTEL_RING_RENDER);
+
+   switch (q->type) {
+   case PIPE_QUERY_OCCLUSION_COUNTER:
+      alloc_query_bo(hw3d, q);
+      q->result.u64 = 0;
+
+      /* XXX we should check the aperture size */
+      q->cp_pre_flush_reserve =
+         hw3d->write_depth_count(hw3d, q->bo, q->used++, FALSE);
+
+      /* reserve some space for pausing the query */
+      i965_cp_reserve(hw3d->cp, q->cp_pre_flush_reserve);
+      list_add(&q->list, &hw3d->occlusion_queries);
+      break;
+   case PIPE_QUERY_TIMESTAMP:
+      /* nop */
+      break;
+   case PIPE_QUERY_TIME_ELAPSED:
+      alloc_query_bo(hw3d, q);
+      q->result.u64 = 0;
+
+      /* XXX we should check the aperture size */
+      q->cp_pre_flush_reserve =
+         hw3d->write_timestamp(hw3d, q->bo, q->used++, FALSE);
+
+      /* reserve some space for pausing the query */
+      i965_cp_reserve(hw3d->cp, q->cp_pre_flush_reserve);
+      list_add(&q->list, &hw3d->timer_queries);
+      break;
+   case PIPE_QUERY_PRIMITIVES_GENERATED:
+      q->result.u64 = 0;
+      list_add(&q->list, &hw3d->prim_queries);
+      break;
+   default:
+      assert(!"unknown query type");
+      break;
+   }
+}
+
+/**
+ * End a query.
+ */
+void
+i965_3d_end_query(struct i965_context *i965, struct i965_query *q)
+{
+   struct i965_3d *hw3d = i965->hw3d;
+
+   i965_cp_set_ring(i965->cp, INTEL_RING_RENDER);
+
+   switch (q->type) {
+   case PIPE_QUERY_OCCLUSION_COUNTER:
+      hw3d->write_depth_count(hw3d, q->bo, q->used++, FALSE);
+      list_del(&q->list);
+      i965_cp_reserve(hw3d->cp, -q->cp_pre_flush_reserve);
+      break;
+   case PIPE_QUERY_TIMESTAMP:
+      alloc_query_bo(hw3d, q);
+      q->result.u64 = 0;
+      hw3d->write_timestamp(hw3d, q->bo, 0, FALSE);
+      break;
+   case PIPE_QUERY_TIME_ELAPSED:
+      hw3d->write_timestamp(hw3d, q->bo, q->used++, FALSE);
+      list_del(&q->list);
+      i965_cp_reserve(hw3d->cp, -q->cp_pre_flush_reserve);
+      break;
+   case PIPE_QUERY_PRIMITIVES_GENERATED:
+      list_del(&q->list);
+      break;
+   default:
+      assert(!"unknown query type");
+      break;
+   }
+
+   /* flush now so that we can wait on the bo */
+   i965_cp_flush(hw3d->cp);
+}
+
+static uint64_t
+timestamp_to_ns(uint64_t timestamp)
+{
+   /*
+    * From the Sandy Bridge PRM, volume 1 part 3, page 73:
+    *
+    *     "This register (TIMESTAMP) toggles every 80 ns of time."
+    */
+   const unsigned scale = 80;
+
+   return timestamp * scale;
+}
+
+static void
+update_occlusion_counter(struct i965_3d *hw3d, struct i965_query *q)
+{
+   uint64_t *vals;
+   int i;
+
+   assert(q->used % 2 == 0);
+
+   q->bo->map(q->bo, FALSE);
+   vals = q->bo->get_virtual(q->bo);
+
+   for (i = 0; i < q->used; i += 2)
+      q->result.u64 += vals[i + 1] - vals[i];
+
+   q->bo->unmap(q->bo);
+
+   q->used = 0;
+}
+
+static void
+update_timestamp(struct i965_3d *hw3d, struct i965_query *q)
+{
+   uint64_t *vals;
+
+   q->bo->map(q->bo, FALSE);
+   vals = q->bo->get_virtual(q->bo);
+
+   q->result.u64 += timestamp_to_ns(vals[0]);
+
+   q->bo->unmap(q->bo);
+}
+
+static void
+update_time_elapsed(struct i965_3d *hw3d, struct i965_query *q)
+{
+   uint64_t *vals, elapsed = 0;
+   int i;
+
+   assert(q->used % 2 == 0);
+
+   q->bo->map(q->bo, FALSE);
+   vals = q->bo->get_virtual(q->bo);
+
+   for (i = 0; i < q->used; i += 2)
+      elapsed += vals[i + 1] - vals[i];
+
+   q->result.u64 += timestamp_to_ns(elapsed);
+
+   q->bo->unmap(q->bo);
+
+   q->used = 0;
+}
+
+/**
+ * Update the query result.
+ */
+void
+i965_3d_update_query_result(struct i965_context *i965, struct i965_query *q)
+{
+   struct i965_3d *hw3d = i965->hw3d;
+
+   switch (q->type) {
+   case PIPE_QUERY_OCCLUSION_COUNTER:
+      update_occlusion_counter(hw3d, q);
+      break;
+   case PIPE_QUERY_TIMESTAMP:
+      update_timestamp(hw3d, q);
+      break;
+   case PIPE_QUERY_TIME_ELAPSED:
+      update_time_elapsed(hw3d, q);
+      break;
+   default:
+      assert(!"unknown query type");
+      break;
+   }
+}
 
 /**
  * Hook for CP new-batch.
@@ -41,7 +253,31 @@
 void
 i965_3d_new_cp_batch(struct i965_3d *hw3d)
 {
+   struct i965_query *q;
+
    hw3d->new_batch = TRUE;
+
+   /* resume occlusion queries */
+   LIST_FOR_EACH_ENTRY(q, &hw3d->occlusion_queries, list) {
+      /* accumulate the result if the bo is alreay full */
+      if (q->used >= q->size) {
+         update_occlusion_counter(hw3d, q);
+         alloc_query_bo(hw3d, q);
+      }
+
+      hw3d->write_depth_count(hw3d, q->bo, q->used++, FALSE);
+   }
+
+   /* resume timer queries */
+   LIST_FOR_EACH_ENTRY(q, &hw3d->timer_queries, list) {
+      /* accumulate the result if the bo is alreay full */
+      if (q->used >= q->size) {
+         update_time_elapsed(hw3d, q);
+         alloc_query_bo(hw3d, q);
+      }
+
+      hw3d->write_timestamp(hw3d, q->bo, q->used++, FALSE);
+   }
 }
 
 /**
@@ -50,6 +286,15 @@ i965_3d_new_cp_batch(struct i965_3d *hw3d)
 void
 i965_3d_pre_cp_flush(struct i965_3d *hw3d)
 {
+   struct i965_query *q;
+
+   /* pause occlusion queries */
+   LIST_FOR_EACH_ENTRY(q, &hw3d->occlusion_queries, list)
+      hw3d->write_depth_count(hw3d, q->bo, q->used++, FALSE);
+
+   /* pause timer queries */
+   LIST_FOR_EACH_ENTRY(q, &hw3d->timer_queries, list)
+      hw3d->write_timestamp(hw3d, q->bo, q->used++, FALSE);
 }
 
 /**
@@ -79,6 +324,10 @@ i965_3d_create(struct i965_cp *cp, int gen)
    hw3d->cp = cp;
    hw3d->gen = gen;
    hw3d->new_batch = TRUE;
+
+   list_inithead(&hw3d->occlusion_queries);
+   list_inithead(&hw3d->timer_queries);
+   list_inithead(&hw3d->prim_queries);
 
    switch (gen) {
    case 6:
@@ -183,6 +432,90 @@ draw_vbo(struct i965_3d *hw3d, const struct i965_context *i965,
    return success;
 }
 
+/* XXX move to u_prim.h */
+static unsigned
+prim_count(unsigned prim, unsigned num_verts)
+{
+   unsigned num_prims;
+
+   u_trim_pipe_prim(prim, &num_verts);
+
+   switch (prim) {
+   case PIPE_PRIM_POINTS:
+      num_prims = num_verts;
+      break;
+   case PIPE_PRIM_LINES:
+      num_prims = num_verts / 2;
+      break;
+   case PIPE_PRIM_LINE_LOOP:
+      num_prims = num_verts;
+      break;
+   case PIPE_PRIM_LINE_STRIP:
+      num_prims = num_verts - 1;
+      break;
+   case PIPE_PRIM_TRIANGLES:
+      num_prims = num_verts / 3;
+      break;
+   case PIPE_PRIM_TRIANGLE_STRIP:
+   case PIPE_PRIM_TRIANGLE_FAN:
+      num_prims = num_verts - 2;
+      break;
+   case PIPE_PRIM_QUADS:
+      num_prims = (num_verts / 4) * 2;
+      break;
+   case PIPE_PRIM_QUAD_STRIP:
+      num_prims = (num_verts / 2 - 1) * 2;
+      break;
+   case PIPE_PRIM_POLYGON:
+      num_prims = num_verts - 2;
+      break;
+   case PIPE_PRIM_LINES_ADJACENCY:
+      num_prims = num_verts / 4;
+      break;
+   case PIPE_PRIM_LINE_STRIP_ADJACENCY:
+      num_prims = num_verts - 3;
+      break;
+   case PIPE_PRIM_TRIANGLES_ADJACENCY:
+      /* u_trim_pipe_prim is wrong? */
+      num_verts += 1;
+
+      num_prims = num_verts / 6;
+      break;
+   case PIPE_PRIM_TRIANGLE_STRIP_ADJACENCY:
+      /* u_trim_pipe_prim is wrong? */
+      if (num_verts >= 6)
+         num_verts -= (num_verts % 2);
+      else
+         num_verts = 0;
+
+      num_prims = (num_verts / 2 - 2);
+      break;
+   default:
+      assert(!"unknown pipe prim");
+      num_prims = 0;
+      break;
+   }
+
+   return num_prims;
+}
+
+static void
+update_prim_queries(struct i965_3d *hw3d, const struct pipe_draw_info *info)
+{
+   struct i965_query *q;
+
+   LIST_FOR_EACH_ENTRY(q, &hw3d->prim_queries, list) {
+      switch (q->type) {
+      case PIPE_QUERY_PRIMITIVES_GENERATED:
+         q->result.u64 += prim_count(info->mode, info->count);
+         break;
+      default:
+         assert(!"unknown query type");
+         break;
+      }
+   }
+}
+
 static boolean
 pass_render_condition(struct i965_3d *hw3d, struct pipe_context *pipe)
 {
@@ -238,6 +571,8 @@ i965_draw_vbo(struct pipe_context *pipe, const struct pipe_draw_info *info)
 
    if (i965_debug & I965_DEBUG_NOCACHE)
       hw3d->flush(hw3d, FALSE);
+
+   update_prim_queries(hw3d, info);
 }
 
 static void

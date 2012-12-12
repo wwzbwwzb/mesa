@@ -42,12 +42,12 @@ typedef void (*dispatch_query)(struct i965_context *i965,
                                struct i965_query *q);
 
 static const dispatch_query dispatch_begin_query[PIPE_QUERY_TYPES] = {
-   [PIPE_QUERY_OCCLUSION_COUNTER]      = NULL,
+   [PIPE_QUERY_OCCLUSION_COUNTER]      = i965_3d_begin_query,
    [PIPE_QUERY_OCCLUSION_PREDICATE]    = NULL,
-   [PIPE_QUERY_TIMESTAMP]              = NULL,
+   [PIPE_QUERY_TIMESTAMP]              = i965_3d_begin_query,
    [PIPE_QUERY_TIMESTAMP_DISJOINT]     = NULL,
-   [PIPE_QUERY_TIME_ELAPSED]           = NULL,
-   [PIPE_QUERY_PRIMITIVES_GENERATED]   = NULL,
+   [PIPE_QUERY_TIME_ELAPSED]           = i965_3d_begin_query,
+   [PIPE_QUERY_PRIMITIVES_GENERATED]   = i965_3d_begin_query,
    [PIPE_QUERY_PRIMITIVES_EMITTED]     = NULL,
    [PIPE_QUERY_SO_STATISTICS]          = NULL,
    [PIPE_QUERY_SO_OVERFLOW_PREDICATE]  = NULL,
@@ -56,12 +56,12 @@ static const dispatch_query dispatch_begin_query[PIPE_QUERY_TYPES] = {
 };
 
 static const dispatch_query dispatch_end_query[PIPE_QUERY_TYPES] = {
-   [PIPE_QUERY_OCCLUSION_COUNTER]      = NULL,
+   [PIPE_QUERY_OCCLUSION_COUNTER]      = i965_3d_end_query,
    [PIPE_QUERY_OCCLUSION_PREDICATE]    = NULL,
-   [PIPE_QUERY_TIMESTAMP]              = NULL,
+   [PIPE_QUERY_TIMESTAMP]              = i965_3d_end_query,
    [PIPE_QUERY_TIMESTAMP_DISJOINT]     = NULL,
-   [PIPE_QUERY_TIME_ELAPSED]           = NULL,
-   [PIPE_QUERY_PRIMITIVES_GENERATED]   = NULL,
+   [PIPE_QUERY_TIME_ELAPSED]           = i965_3d_end_query,
+   [PIPE_QUERY_PRIMITIVES_GENERATED]   = i965_3d_end_query,
    [PIPE_QUERY_PRIMITIVES_EMITTED]     = NULL,
    [PIPE_QUERY_SO_STATISTICS]          = NULL,
    [PIPE_QUERY_SO_OVERFLOW_PREDICATE]  = NULL,
@@ -70,11 +70,11 @@ static const dispatch_query dispatch_end_query[PIPE_QUERY_TYPES] = {
 };
 
 static const dispatch_query dispatch_update_query_result[PIPE_QUERY_TYPES] = {
-   [PIPE_QUERY_OCCLUSION_COUNTER]      = NULL,
+   [PIPE_QUERY_OCCLUSION_COUNTER]      = i965_3d_update_query_result,
    [PIPE_QUERY_OCCLUSION_PREDICATE]    = NULL,
-   [PIPE_QUERY_TIMESTAMP]              = NULL,
+   [PIPE_QUERY_TIMESTAMP]              = i965_3d_update_query_result,
    [PIPE_QUERY_TIMESTAMP_DISJOINT]     = NULL,
-   [PIPE_QUERY_TIME_ELAPSED]           = NULL,
+   [PIPE_QUERY_TIME_ELAPSED]           = i965_3d_update_query_result,
    [PIPE_QUERY_PRIMITIVES_GENERATED]   = NULL,
    [PIPE_QUERY_PRIMITIVES_EMITTED]     = NULL,
    [PIPE_QUERY_SO_STATISTICS]          = NULL,
@@ -89,6 +89,11 @@ i965_create_query(struct pipe_context *pipe, unsigned query_type)
    struct i965_query *q;
 
    switch (query_type) {
+   case PIPE_QUERY_OCCLUSION_COUNTER:
+   case PIPE_QUERY_TIMESTAMP:
+   case PIPE_QUERY_TIME_ELAPSED:
+   case PIPE_QUERY_PRIMITIVES_GENERATED:
+      break;
    default:
       return NULL;
    }

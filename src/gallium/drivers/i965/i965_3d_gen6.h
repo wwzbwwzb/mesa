@@ -126,6 +126,10 @@ struct i965_3d {
       unsigned mode;
    } render_condition;
 
+   struct list_head occlusion_queries;
+   struct list_head timer_queries;
+   struct list_head prim_queries;
+
    struct i965_3d_gen6 gen6;
 
    const struct i965_gpe_gen6 *gpe;

@@ -27,6 +27,7 @@
 
 #include "intel_chipset.h"
 
+#include "util/u_blitter.h"
 #include "i965_shader.h"
 #include "i965_common.h"
 #include "i965_screen.h"
@@ -100,6 +101,8 @@ i965_context_destroy(struct pipe_context *pipe)
    if (i965->last_cp_bo)
       i965->last_cp_bo->unreference(i965->last_cp_bo);
 
+   if (i965->blitter)
+      util_blitter_destroy(i965->blitter);
    if (i965->shader_cache)
       i965_shader_cache_destroy(i965->shader_cache);
    if (i965->cp)
@@ -204,6 +207,13 @@ i965_context_create(struct pipe_screen *screen, void *priv)
    i965_init_transfer_functions(i965);
    i965_init_video_functions(i965);
    i965_init_gpgpu_functions(i965);
+
+   /* this must be called last as u_blitter is a client of the pipe context */
+   i965->blitter = util_blitter_create(&i965->base);
+   if (!i965->blitter) {
+      i965_context_destroy(&i965->base);
+      return NULL;
+   }
 
    return &i965->base;
 }

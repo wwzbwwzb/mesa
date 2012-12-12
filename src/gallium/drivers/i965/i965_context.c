@@ -27,6 +27,7 @@
 
 #include "intel_chipset.h"
 
+#include "i965_shader.h"
 #include "i965_common.h"
 #include "i965_screen.h"
 #include "i965_cp.h"
@@ -99,6 +100,8 @@ i965_context_destroy(struct pipe_context *pipe)
    if (i965->last_cp_bo)
       i965->last_cp_bo->unreference(i965->last_cp_bo);
 
+   if (i965->shader_cache)
+      i965_shader_cache_destroy(i965->shader_cache);
    if (i965->cp)
       i965_cp_destroy(i965->cp);
 
@@ -172,8 +175,9 @@ i965_context_create(struct pipe_screen *screen, void *priv)
    }
 
    i965->cp = i965_cp_create(i965->winsys);
+   i965->shader_cache = i965_shader_cache_create(i965->winsys);
 
-   if (!i965->cp) {
+   if (!i965->cp || !i965->shader_cache) {
       i965_context_destroy(&i965->base);
       return NULL;
    }
@@ -184,6 +188,8 @@ i965_context_create(struct pipe_screen *screen, void *priv)
          i965_context_pre_cp_flush, (void *) i965);
    i965_cp_set_hook(i965->cp, I965_CP_HOOK_POST_FLUSH,
          i965_context_post_cp_flush, (void *) i965);
+
+   i965->dirty = I965_DIRTY_ALL;
 
    i965->base.screen = screen;
    i965->base.priv = priv;

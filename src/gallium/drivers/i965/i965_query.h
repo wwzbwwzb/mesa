@@ -30,7 +30,19 @@
 
 #include "i965_common.h"
 
+struct intel_bo;
 struct i965_context;
+
+struct i965_query {
+   unsigned type;
+   union pipe_query_result result;
+
+   struct intel_bo *bo;
+   int used, size;
+
+   struct list_head list;
+   int cp_pre_flush_reserve;
+};
 
 void
 i965_init_query_functions(struct i965_context *i965);

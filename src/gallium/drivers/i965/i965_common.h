@@ -39,6 +39,28 @@
 #include "util/u_memory.h"
 #include "util/u_double_list.h"
 
+/**
+ * \see brw_context.h
+ */
+#define I965_MAX_DRAW_BUFFERS    8
+#define I965_MAX_CONST_BUFFERS   1
+#define I965_MAX_SAMPLER_VIEWS   16
+#define I965_MAX_SAMPLERS        16
+#define I965_MAX_SO_BINDINGS     64
+#define I965_MAX_SO_BUFFERS      4
+
+#define I965_MAX_VS_SURFACES        (I965_MAX_CONST_BUFFERS + I965_MAX_SAMPLER_VIEWS)
+#define I965_VS_CONST_SURFACE(i)    (i)
+#define I965_VS_TEXTURE_SURFACE(i)  (I965_MAX_CONST_BUFFERS  + i)
+
+#define I965_MAX_GS_SURFACES        (I965_MAX_SO_BINDINGS)
+#define I965_GS_SO_SURFACE(i)       (i)
+
+#define I965_MAX_WM_SURFACES        (I965_MAX_DRAW_BUFFERS + I965_MAX_CONST_BUFFERS + I965_MAX_SAMPLER_VIEWS)
+#define I965_WM_DRAW_SURFACE(i)     (i)
+#define I965_WM_CONST_SURFACE(i)    (I965_MAX_DRAW_BUFFERS + i)
+#define I965_WM_TEXTURE_SURFACE(i)  (I965_MAX_DRAW_BUFFERS + I965_MAX_CONST_BUFFERS  + i)
+
 enum i965_debug {
    I965_DEBUG_NOHW      = 0x01,
    I965_DEBUG_3D        = 0x02,

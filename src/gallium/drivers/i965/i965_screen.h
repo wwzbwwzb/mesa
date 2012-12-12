@@ -29,9 +29,16 @@
 #define I965_SCREEN_H
 
 #include "pipe/p_screen.h"
+#include "pipe/p_state.h"
 #include "i965_public.h"
 
 struct intel_winsys;
+struct intel_bo;
+
+struct i965_fence {
+   struct pipe_reference reference;
+   struct intel_bo *bo;
+};
 
 struct i965_screen {
    struct pipe_screen base;
@@ -45,6 +52,12 @@ static INLINE struct i965_screen *
 i965_screen(struct pipe_screen *screen)
 {
    return (struct i965_screen *) screen;
+}
+
+static INLINE struct i965_fence *
+i965_fence(struct pipe_fence_handle *fence)
+{
+   return (struct i965_fence *) fence;
 }
 
 #endif /* I965_SCREEN_H */

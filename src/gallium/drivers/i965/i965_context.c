@@ -44,11 +44,19 @@
 static void
 i965_context_new_cp_batch(struct i965_cp *cp, void *data)
 {
+   struct i965_context *i965 = i965_context(data);
+
+   if (cp->ring == INTEL_RING_RENDER)
+      i965_3d_new_cp_batch(i965->hw3d);
 }
 
 static void
 i965_context_pre_cp_flush(struct i965_cp *cp, void *data)
 {
+   struct i965_context *i965 = i965_context(data);
+
+   if (cp->ring == INTEL_RING_RENDER)
+      i965_3d_pre_cp_flush(i965->hw3d);
 }
 
 static void
@@ -62,6 +70,9 @@ i965_context_post_cp_flush(struct i965_cp *cp, void *data)
    /* remember the just flushed bo, which fences could wait on */
    i965->last_cp_bo = cp->bo;
    i965->last_cp_bo->reference(i965->last_cp_bo);
+
+   if (cp->ring == INTEL_RING_RENDER)
+      i965_3d_post_cp_flush(i965->hw3d);
 }
 
 static void
@@ -103,6 +114,8 @@ i965_context_destroy(struct pipe_context *pipe)
 
    if (i965->blitter)
       util_blitter_destroy(i965->blitter);
+   if (i965->hw3d)
+      i965_3d_destroy(i965->hw3d);
    if (i965->shader_cache)
       i965_shader_cache_destroy(i965->shader_cache);
    if (i965->cp)
@@ -179,8 +192,10 @@ i965_context_create(struct pipe_screen *screen, void *priv)
 
    i965->cp = i965_cp_create(i965->winsys);
    i965->shader_cache = i965_shader_cache_create(i965->winsys);
+   if (i965->cp)
+      i965->hw3d = i965_3d_create(i965->cp, i965->gen);
 
-   if (!i965->cp || !i965->shader_cache) {
+   if (!i965->cp || !i965->shader_cache || !i965->hw3d) {
       i965_context_destroy(&i965->base);
       return NULL;
    }

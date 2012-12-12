@@ -29,6 +29,23 @@
 #define I965_3D_H
 
 struct i965_context;
+struct i965_cp;
+struct i965_3d;
+
+struct i965_3d *
+i965_3d_create(struct i965_cp *cp, int gen);
+
+void
+i965_3d_destroy(struct i965_3d *hw3d);
+
+void
+i965_3d_new_cp_batch(struct i965_3d *hw3d);
+
+void
+i965_3d_pre_cp_flush(struct i965_3d *hw3d);
+
+void
+i965_3d_post_cp_flush(struct i965_3d *hw3d);
 
 void
 i965_init_3d_functions(struct i965_context *i965);

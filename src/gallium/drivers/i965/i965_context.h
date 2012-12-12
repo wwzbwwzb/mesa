@@ -37,6 +37,7 @@ struct intel_winsys;
 struct intel_bo;
 struct i965_screen;
 struct i965_cp;
+struct i965_3d;
 struct i965_shader_state;
 
 struct i965_vertex_element {
@@ -65,6 +66,7 @@ struct i965_context {
    struct intel_bo *last_cp_bo;
 
    struct i965_shader_cache *shader_cache;
+   struct i965_3d *hw3d;
    struct blitter_context *blitter;
 
    uint32_t dirty;

@@ -2,6 +2,7 @@ C_SOURCES := \
 	i965_3d.c \
 	i965_blit.c \
 	i965_context.c \
+	i965_cp.c \
 	i965_format.c \
 	i965_gpgpu.c \
 	i965_query.c \
